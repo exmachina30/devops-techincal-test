@@ -1,0 +1,44 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+    - name: Login to DigitalOcean Registry
+      run: doctl registry login --expiry-seconds 600
+
+    - name: Build Docker image
+      run: |
+        docker build \
+          -t ${{ secrets.DO_REGISTRY }}/hello-app:${{ github.sha }} \
+          -t ${{ secrets.DO_REGISTRY }}/hello-app:latest .
+
+    - name: Push Docker image
+      run: |
+        docker push ${{ secrets.DO_REGISTRY }}/hello-app:${{ github.sha }}
+        docker push ${{ secrets.DO_REGISTRY }}/hello-app:latest
+
+    - name: Deploy via SSH to Minikube
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.DROPLET_HOST }}
+        username: ${{ secrets.DROPLET_USER }}
+        key: ${{ secrets.DROPLET_SSH_KEY }}
+        script: |
+          kubectl config use-context minikube
+          kubectl set image deployment/node-app \
+            node-app=registry.digitalocean.com/node-app/hello-app:${{ github.sha }}
+          kubectl rollout status deployment/node-app
