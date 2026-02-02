@@ -21,6 +21,7 @@ jobs:
       run: doctl registry login --expiry-seconds 600
 
     - name: Build Docker image
+      working-directory: app
       run: |
         docker build \
           -t ${{ secrets.DO_REGISTRY }}/hello-app:${{ github.sha }} \
